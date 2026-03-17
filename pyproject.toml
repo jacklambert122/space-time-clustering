@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "space-time-cluster"
+version = "0.2.0"
+description = "Global space-time clustering pipeline using unix-second timestamps, H3 partitioning, and optional geospatial classification."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "OpenAI"}]
+dependencies = [
+  "numpy>=1.24",
+  "polars>=0.20",
+  "pyarrow>=14",
+  "scipy>=1.10",
+  "h3>=4.1",
+]
+
+[project.optional-dependencies]
+geo = [
+  "geopandas>=0.14",
+  "shapely>=2.0",
+  "pyogrio>=0.7",
+  "fiona>=1.9",
+]
+test = [
+  "pytest>=8.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

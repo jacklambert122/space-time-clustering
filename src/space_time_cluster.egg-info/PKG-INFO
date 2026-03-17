@@ -1,0 +1,153 @@
+Metadata-Version: 2.4
+Name: space-time-cluster
+Version: 0.2.0
+Summary: Global space-time clustering pipeline using unix-second timestamps, H3 partitioning, and optional geospatial classification.
+Author: OpenAI
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.24
+Requires-Dist: polars>=0.20
+Requires-Dist: pyarrow>=14
+Requires-Dist: scipy>=1.10
+Requires-Dist: h3>=4.1
+Provides-Extra: geo
+Requires-Dist: geopandas>=0.14; extra == "geo"
+Requires-Dist: shapely>=2.0; extra == "geo"
+Requires-Dist: pyogrio>=0.7; extra == "geo"
+Requires-Dist: fiona>=1.9; extra == "geo"
+Provides-Extra: test
+Requires-Dist: pytest>=8.0; extra == "test"
+
+# Space-Time Cluster Repo (Unix Seconds)
+
+This repo clusters large geospatial detection sets using:
+
+- `time` as **unix seconds stored as float64**
+- H3 for global coarse partitioning
+- exact haversine distance for final pair filtering
+- optional per-point neighbor-count filtering
+- connected components for final cluster labels
+- optional GeoPandas classification against city/lake layers
+
+## Repo layout
+
+- `src/space_time_cluster/` - package code
+- `scripts/run_pipeline.py` - CLI entrypoint
+- `scripts/make_mock_detections.py` - create mock detection parquet
+- `scripts/prepare_global_cities.py` - prepare global city vector data for the pipeline
+- `configs/example_config.json` - sample config
+- `tests/` - small unit tests
+
+## Install
+
+Base install:
+
+```bash
+python -m pip install --no-build-isolation -e .
+```
+
+Geo extras:
+
+```bash
+python -m pip install --no-build-isolation -e ".[geo]"
+```
+
+Test extras:
+
+```bash
+python -m pip install --no-build-isolation -e ".[test]"
+```
+
+## 1) Generate mock detections
+
+This creates a parquet file with columns:
+
+- `id`
+- `time` (unix seconds as float64)
+- `lat`
+- `lon`
+
+```bash
+python scripts/make_mock_detections.py --output data/detections.parquet
+```
+
+## 2) Run the clustering pipeline
+
+```bash
+python scripts/run_pipeline.py --config configs/example_config.json
+```
+
+Outputs land in `out/` by default:
+
+- `point_assignments.parquet`
+- `cluster_summary.parquet`
+- optional polygon hit outputs if city/lake vectors are configured
+
+## 3) Prepare global city data
+
+### GeoNames
+
+Download a GeoNames file such as `cities500.zip`, `cities1000.zip`, `cities15000.zip`, or `allCountries.zip`, then run:
+
+```bash
+python scripts/prepare_global_cities.py geonames \
+  --input cities500.zip \
+  --out-base data/cities_global \
+  --min-population 1000 \
+  --h3-res 7
+```
+
+### Natural Earth
+
+```bash
+python scripts/prepare_global_cities.py naturalearth \
+  --input ne_10m_populated_places.shp \
+  --out-base data/cities_global_ne \
+  --min-scalerank 8 \
+  --h3-res 7
+```
+
+The script always writes:
+
+- `*.parquet`
+- `*.gpkg`
+
+It also attempts to write `*.gdb` using the GDAL `OpenFileGDB` driver if your environment supports writing that format. Many Python/GDAL builds can read `.gdb` but cannot write it. When write support is missing, the script prints a message and still gives you `.parquet` and `.gpkg`.
+
+## Pipeline notes
+
+### Time handling
+
+The pipeline assumes source `time` values are **unix seconds as float**. Internally it converts them to integer microseconds for stable threshold checks and binning.
+
+### Neighbor-count filter
+
+If enabled:
+
+- build valid space-time edges
+- count neighbors from that edge list
+- remove points with fewer than `min_neighbors`
+- run connected components on the filtered graph
+
+This is optional and is controlled by:
+
+- `use_neighbor_count_filter`
+- `min_neighbors`
+
+### Cluster-size filter
+
+A final connected component must still have at least `min_cluster_size` points to survive.
+
+## Example config fields
+
+- `start_time`, `end_time`: unix seconds as float
+- `time_bin_seconds`: coarse time buckets
+- `max_time_delta_s`: exact pairwise time threshold
+- `max_distance_m`: exact pairwise spatial threshold
+- `h3_res`: H3 resolution for coarse spatial partitioning
+
+## Testing
+
+```bash
+pytest
+```

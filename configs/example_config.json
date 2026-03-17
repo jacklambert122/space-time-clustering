@@ -1,0 +1,21 @@
+{
+  "parquet_path": "data/detections.parquet",
+  "time_col": "time",
+  "id_col": "id",
+  "lat_col": "lat",
+  "lon_col": "lon",
+  "start_time": 1773532800.0,
+  "end_time": 1773536400.0,
+  "h3_res": 7,
+  "time_bin_seconds": 60.0,
+  "max_time_delta_s": 30.0,
+  "max_distance_m": 1500.0,
+  "use_neighbor_count_filter": true,
+  "min_neighbors": 2,
+  "min_cluster_size": 3,
+  "guard_band_m": 100.0,
+  "radius_quantile": 0.95,
+  "out_dir": "out",
+  "city_vector_path": null,
+  "lake_vector_path": null
+}
