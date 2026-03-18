@@ -8,7 +8,7 @@ version = "0.2.0"
 description = "Global space-time clustering pipeline using unix-second timestamps, H3 partitioning, and optional geospatial classification."
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [{name = "OpenAI"}]
+authors = [{name = "Jack Lambert"}]
 dependencies = [
   "numpy>=1.24",
   "polars>=0.20",
@@ -23,6 +23,10 @@ geo = [
   "shapely>=2.0",
   "pyogrio>=0.7",
   "fiona>=1.9",
+  "bokeh>=3.4",
+  "holoviews>=1.19",
+  "hvplot>=0.11",
+  "panel>=1.4",
 ]
 test = [
   "pytest>=8.0",

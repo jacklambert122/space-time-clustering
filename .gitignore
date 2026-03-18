@@ -1,3 +1,40 @@
 venv/
 .venv/
 env/
+
+# Data and logs
+data/
+logs/
+out/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test and coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Type checker / linter caches
+.mypy_cache/
+.ruff_cache/
+.pyre/
+
+# Build and packaging artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Environment and local tool state
+.python-version
+.ipynb_checkpoints/
+
+# Editor / OS files
+.DS_Store
+.idea/
+.vscode/

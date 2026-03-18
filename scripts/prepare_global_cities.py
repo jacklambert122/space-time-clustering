@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Prepare normalized global city reference datasets from GeoNames or Natural Earth."""
+
 import argparse
 import io
 from pathlib import Path
@@ -16,6 +18,15 @@ GEONAMES_COLUMNS = [
 
 
 def maybe_add_h3(df: pl.DataFrame, h3_res: int | None) -> pl.DataFrame:
+    """Attach an H3 column when a target resolution is provided.
+
+    Inputs:
+        df: Normalized city DataFrame with ``lat`` and ``lon`` columns.
+        h3_res: Optional H3 resolution to compute.
+
+    Returns:
+        The original DataFrame or a copy with an added ``h3`` column.
+    """
     if h3_res is None:
         return df
     import h3
@@ -24,6 +35,15 @@ def maybe_add_h3(df: pl.DataFrame, h3_res: int | None) -> pl.DataFrame:
 
 
 def geonames_to_polars(input_zip: str, min_population: int) -> pl.DataFrame:
+    """Load a GeoNames zip archive into the normalized city schema.
+
+    Inputs:
+        input_zip: Path to a GeoNames zip archive containing a tab-separated text file.
+        min_population: Minimum population threshold for retained rows.
+
+    Returns:
+        A normalized Polars DataFrame of city records.
+    """
     with zipfile.ZipFile(input_zip, "r") as zf:
         members = [m for m in zf.namelist() if m.endswith(".txt")]
         if not members:
@@ -67,6 +87,15 @@ def geonames_to_polars(input_zip: str, min_population: int) -> pl.DataFrame:
 
 
 def natural_earth_to_polars(input_vector: str, min_scalerank: int | None) -> pl.DataFrame:
+    """Load Natural Earth populated places into the normalized city schema.
+
+    Inputs:
+        input_vector: Path to a Natural Earth populated places vector file.
+        min_scalerank: Optional maximum scalerank value to retain.
+
+    Returns:
+        A normalized Polars DataFrame of city records.
+    """
     import geopandas as gpd
 
     gdf = gpd.read_file(input_vector)
@@ -77,7 +106,15 @@ def natural_earth_to_polars(input_vector: str, min_scalerank: int | None) -> pl.
 
     cols = {c.lower(): c for c in gdf.columns}
 
-    def pick(*names: str):
+    def pick(*names: str) -> str | None:
+        """Pick the first available source column name from a list of candidates.
+
+        Inputs:
+            *names: Candidate column names in priority order.
+
+        Returns:
+            The matching source column name, or ``None`` if none are present.
+        """
         for n in names:
             if n.lower() in cols:
                 return cols[n.lower()]
@@ -119,6 +156,16 @@ def natural_earth_to_polars(input_vector: str, min_scalerank: int | None) -> pl.
 
 
 def write_vector_outputs(df: pl.DataFrame, out_base: str, layer_name: str) -> None:
+    """Write the normalized city dataset to parquet and vector formats.
+
+    Inputs:
+        df: Normalized city DataFrame with coordinate columns.
+        out_base: Output path prefix without file extension.
+        layer_name: Layer name to use in vector outputs.
+
+    Returns:
+        None. The function writes parquet and vector files to disk.
+    """
     import geopandas as gpd
     from pyogrio import list_drivers
 
@@ -139,6 +186,14 @@ def write_vector_outputs(df: pl.DataFrame, out_base: str, layer_name: str) -> No
 
 
 def main() -> None:
+    """Parse CLI arguments and generate prepared city reference data.
+
+    Inputs:
+        None. Arguments are read from the command line.
+
+    Returns:
+        None. The function writes normalized city reference outputs and prints a summary.
+    """
     parser = argparse.ArgumentParser(description="Prepare a global cities dataset for the clustering pipeline.")
     sub = parser.add_subparsers(dest="source", required=True)
 

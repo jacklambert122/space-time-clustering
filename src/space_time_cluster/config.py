@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Define pipeline configuration values and load them from JSON files."""
+
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -8,6 +10,8 @@ from typing import Any
 
 @dataclass
 class ClusterConfig:
+    """Runtime settings for loading, clustering, and writing detection outputs."""
+
     parquet_path: str
     time_col: str = "time"
     id_col: str = "id"
@@ -37,6 +41,10 @@ class ClusterConfig:
     guard_band_m: float = 100.0
     radius_quantile: float = 0.95
 
+    # constant-position Kalman feature extraction
+    kf_process_noise_var_m2: float = 25.0
+    kf_measurement_noise_var_m2: float = 10_000.0
+
     # outputs
     out_dir: str = "out"
 
@@ -46,6 +54,14 @@ class ClusterConfig:
 
 
 def load_config(path: str | Path) -> ClusterConfig:
+    """Load a JSON config file into a ``ClusterConfig`` instance.
+
+    Inputs:
+        path: Filesystem path to a JSON configuration file.
+
+    Returns:
+        A populated ``ClusterConfig`` object.
+    """
     with open(path, "r", encoding="utf-8") as f:
         payload: dict[str, Any] = json.load(f)
     return ClusterConfig(**payload)

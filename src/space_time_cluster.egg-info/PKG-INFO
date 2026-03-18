@@ -2,7 +2,7 @@ Metadata-Version: 2.4
 Name: space-time-cluster
 Version: 0.2.0
 Summary: Global space-time clustering pipeline using unix-second timestamps, H3 partitioning, and optional geospatial classification.
-Author: OpenAI
+Author: Jack Lambert
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 Requires-Dist: numpy>=1.24
@@ -15,10 +15,15 @@ Requires-Dist: geopandas>=0.14; extra == "geo"
 Requires-Dist: shapely>=2.0; extra == "geo"
 Requires-Dist: pyogrio>=0.7; extra == "geo"
 Requires-Dist: fiona>=1.9; extra == "geo"
+Requires-Dist: bokeh>=3.4; extra == "geo"
+Requires-Dist: holoviews>=1.19; extra == "geo"
+Requires-Dist: hvplot>=0.11; extra == "geo"
 Provides-Extra: test
 Requires-Dist: pytest>=8.0; extra == "test"
 
 # Space-Time Cluster Repo (Unix Seconds)
+
+![overview](images/overview.png)
 
 This repo clusters large geospatial detection sets using:
 
@@ -32,33 +37,52 @@ This repo clusters large geospatial detection sets using:
 ## Repo layout
 
 - `src/space_time_cluster/` - package code
+- `src/space_time_cluster/pipeline.py` - top-level pipeline orchestration
+- `src/space_time_cluster/graph.py` - graph building, neighbor filtering, and connected components
+- `src/space_time_cluster/spatial.py` - H3 helpers and haversine distance utilities
+- `src/space_time_cluster/time_utils.py` - unix-second to microsecond conversion and time binning
+- `src/space_time_cluster/summary.py` - cluster summary generation
+- `src/space_time_cluster/classification.py` - optional polygon classification against city/lake layers
+- `src/space_time_cluster/io.py` - parquet loading and output directory helpers
 - `scripts/run_pipeline.py` - CLI entrypoint
 - `scripts/make_mock_detections.py` - create mock detection parquet
 - `scripts/prepare_global_cities.py` - prepare global city vector data for the pipeline
+- `scripts/prepare_water_land.py` - convert water/land vector layers into simplified parquet point datasets
+- `scripts/visualize_detections.py` - plot clustered detections with centroids, ellipses, and nearby cities/lakes
+- `scripts/visualize_detection.py` - older inspection-oriented helper conversions
 - `configs/example_config.json` - sample config
-- `tests/` - small unit tests
+- `tests/` - unit tests for time, spatial, graph, I/O, and summary helpers
 
 ## Install
 
 Base install:
 
 ```bash
-python -m pip install --no-build-isolation -e .
+python -m pip install -e .
 ```
 
 Geo extras:
 
 ```bash
-python -m pip install --no-build-isolation -e ".[geo]"
+python -m pip install -e ".[geo]"
 ```
 
 Test extras:
 
 ```bash
-python -m pip install --no-build-isolation -e ".[test]"
+python -m pip install -e ".[test]"
 ```
 
-## 1) Generate mock detections
+Local virtual environment example:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e ".[test]"
+```
+
+## Running each script
+
+### `scripts/make_mock_detections.py`
 
 This creates a parquet file with columns:
 
@@ -71,7 +95,21 @@ This creates a parquet file with columns:
 python scripts/make_mock_detections.py --output data/detections.parquet
 ```
 
-## 2) Run the clustering pipeline
+Optional arguments:
+
+- `--seed` to make the generated dataset reproducible
+- `--noise-points` to change the amount of global background noise
+
+Example:
+
+```bash
+python scripts/make_mock_detections.py \
+  --output data/detections.parquet \
+  --seed 42 \
+  --noise-points 1500
+```
+
+### `scripts/run_pipeline.py`
 
 ```bash
 python scripts/run_pipeline.py --config configs/example_config.json
@@ -81,27 +119,81 @@ Outputs land in `out/` by default:
 
 - `point_assignments.parquet`
 - `cluster_summary.parquet`
-- optional polygon hit outputs if city/lake vectors are configured
+- `cluster_city_hits.parquet` when `city_vector_path` is configured
+- `cluster_lake_hits.parquet` when `lake_vector_path` is configured
 
-## 3) Prepare global city data
+### `scripts/prepare_global_cities.py`
 
-### GeoNames
+This script has two subcommands:
+
+- `geonames` for GeoNames zip inputs
+- `naturalearth` for Natural Earth populated places vector inputs
+
+#### `geonames`
 
 Download a GeoNames file such as `cities500.zip`, `cities1000.zip`, `cities15000.zip`, or `allCountries.zip`, then run:
 
+First, place the data somewhere:
+```bash
+mkdir -p data/raw
+```
+
+
+Smaller dataset fo cities:
+```bash
+wget -O data/raw/cities500.zip \
+  http://download.geonames.org/export/dump/cities500.zip
+```
+
+```bash
+wget -O data/raw/allCountries.zip \
+  http://download.geonames.org/export/dump/allCountries.zip
+```
+
+Natural earth populated regions:
+```bash
+wget -O data/raw/ne_10m_populated_places.zip \
+  https://naciscdn.org/naturalearth/10m/cultural/ne_10m_populated_places.zip
+
+```
+
+HydroLAKES global lakes polygons:
+```bash
+wget -O data/raw/HydroLAKES_polys_v10_shp.zip \
+  https://data.hydrosheds.org/file/HydroLAKES/HydroLAKES_polys_v10_shp.zip
+```
+
+Natural Earth land polygons:
+
+```bash
+wget -O data/raw/ne_10m_land.zip \
+  https://naciscdn.org/naturalearth/10m/physical/ne_10m_land.zip
+```
+
+
 ```bash
 python scripts/prepare_global_cities.py geonames \
-  --input cities500.zip \
+  --input data/raw/cities500.zip \
   --out-base data/cities_global \
   --min-population 1000 \
   --h3-res 7
 ```
 
-### Natural Earth
+Unzip commands:
+```bash
+mkdir -p data/unpacked
+
+unzip -o data/raw/cities500.zip -d data/unpacked/cities500
+unzip -o data/raw/ne_10m_populated_places.zip -d data/unpacked/ne_10m_populated_places
+unzip -o data/raw/HydroLAKES_polys_v10_shp.zip -d data/unpacked/HydroLAKES_polys_v10_shp
+unzip -o data/raw/ne_10m_land.zip -d data/unpacked/ne_10m_lan
+```
+
+#### `naturalearth`
 
 ```bash
 python scripts/prepare_global_cities.py naturalearth \
-  --input ne_10m_populated_places.shp \
+  --input data/unpacked/ne_10m_populated_places/ne_10m_populated_places.shp \
   --out-base data/cities_global_ne \
   --min-scalerank 8 \
   --h3-res 7
@@ -113,6 +205,127 @@ The script always writes:
 - `*.gpkg`
 
 It also attempts to write `*.gdb` using the GDAL `OpenFileGDB` driver if your environment supports writing that format. Many Python/GDAL builds can read `.gdb` but cannot write it. When write support is missing, the script prints a message and still gives you `.parquet` and `.gpkg`.
+
+### `scripts/prepare_water_land.py`
+
+This script now exposes a CLI with two subcommands:
+
+- `lakes`
+- `land`
+
+If you keep your source files in the default repo locations, you can run it without extra arguments:
+
+```bash
+python scripts/prepare_water_land.py lakes
+python scripts/prepare_water_land.py land
+```
+
+Default paths:
+
+- `lakes` input: `data/unpacked/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp`
+- `lakes` output: `data/lakes.parquet`
+- `land` input: `data/unpacked/ne_10m_land/ne_10m_land.shp`
+- `land` output: `data/land_points.parquet`
+
+You can also override the defaults:
+
+```bash
+python scripts/prepare_water_land.py lakes \
+  --input data/unpacked/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp \
+  --output data/lakes.parquet
+```
+
+```bash
+python scripts/prepare_water_land.py land \
+  --input data/unpacked/ne_10m_land/ne_10m_land.shp \
+  --output data/land_points.parquet
+```
+
+#### Convert lakes to centroid parquet records
+
+Use `scripts/prepare_water_land.py` when you want one parquet row per lake with centroid coordinates:
+
+```python
+from scripts.prepare_water_land import convert_lakes
+
+convert_lakes(
+    input_path="data/unpacked/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp",
+    output_parquet="data/lakes.parquet",
+)
+```
+
+This writes a parquet file with lake name, centroid latitude/longitude, area, and a `type` column.
+
+#### Convert land polygons to sampled point parquet records
+
+Use `scripts/prepare_water_land.py` when you want a coarse grid of points that fall on land:
+
+```python
+from scripts.prepare_water_land import convert_land
+
+convert_land(
+    input_path="data/unpacked/ne_10m_land/ne_10m_land.shp",
+    output_parquet="data/land_points.parquet",
+)
+```
+
+This is a simplified approximation intended for quick classification or inspection workflows rather than precise polygon containment analysis.
+
+### `scripts/visualize_detections.py`
+
+This script renders a static plot of clustered detections, cluster centroids, covariance-based ellipses, and nearby cities/lakes.
+
+Basic usage:
+
+```bash
+python scripts/visualize_detections.py
+```
+
+Useful arguments:
+
+- `--assignments` to point at a different `point_assignments.parquet`
+- `--summary` to point at a different `cluster_summary.parquet`
+- `--output` to control the image path
+- `--city-path` to overlay nearby city data
+- `--lake-path` to overlay nearby lake data
+- `--nearby-radius-km` to expand the search radius around each cluster
+- `--max-clusters` to plot only the largest `N` clusters
+- `--hide-noise` to suppress unclustered detections
+
+Example:
+
+```bash
+python scripts/visualize_detections.py \
+  --assignments out/point_assignments.parquet \
+  --summary out/cluster_summary.parquet \
+  --output images/detection_clusters.png \
+  --city-path data/cities_global.gpkg \
+  --lake-path data/lakes.parquet \
+  --nearby-radius-km 50 \
+  --max-clusters 10
+```
+
+By default it looks for:
+
+- `out/point_assignments.parquet`
+- `out/cluster_summary.parquet`
+- `data/cities_global.gpkg` or `data/cities_global.parquet` if present
+- `data/lakes.parquet` or `data/unpacked/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp` if present
+
+and writes `images/detection_clusters.png`.
+
+### `scripts/visualize_detection.py`
+
+This older helper file still exposes the conversion helpers from `scripts/prepare_water_land.py` for import-based use:
+
+```python
+from scripts.visualize_detection import convert_lakes, convert_land
+
+convert_lakes("path/to/lakes.shp", "data/lakes.parquet")
+convert_land("path/to/land.shp", "data/land_points.parquet")
+```
+
+Use it the same way via Python import if you want a lightweight inspection-oriented scratch utility module.
 
 ## Pipeline notes
 
@@ -145,9 +358,29 @@ A final connected component must still have at least `min_cluster_size` points t
 - `max_time_delta_s`: exact pairwise time threshold
 - `max_distance_m`: exact pairwise spatial threshold
 - `h3_res`: H3 resolution for coarse spatial partitioning
+- `use_neighbor_count_filter`, `min_neighbors`: optional support filter before connected components
+- `min_cluster_size`: final minimum connected-component size
+- `guard_band_m`, `radius_quantile`: cluster radius summary controls
+- `city_vector_path`, `lake_vector_path`: optional polygon layers for cluster classification
+
+## Package usage
+
+You can also call the pipeline directly from Python:
+
+```python
+from space_time_cluster.config import load_config
+from space_time_cluster.pipeline import run_pipeline
+
+cfg = load_config("configs/example_config.json")
+run_pipeline(cfg)
+```
+
+The package code is split by responsibility, so lower-level helpers can also be imported independently for custom workflows and targeted tests.
 
 ## Testing
 
 ```bash
-pytest
+.venv/bin/pytest
 ```
+
+If you do not use a local virtual environment, `pytest` also works after installing the test extras into your current Python environment.

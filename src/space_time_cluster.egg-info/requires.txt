@@ -9,6 +9,9 @@ geopandas>=0.14
 shapely>=2.0
 pyogrio>=0.7
 fiona>=1.9
+bokeh>=3.4
+holoviews>=1.19
+hvplot>=0.11
 
 [test]
 pytest>=8.0

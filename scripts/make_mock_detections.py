@@ -1,16 +1,24 @@
 from __future__ import annotations
 
+"""Generate synthetic detection parquet data for demos, tests, and local experiments."""
+
 import argparse
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import math
 import random
+from typing import TypeAlias
 
 import polars as pl
 
 
+DetectionRow: TypeAlias = dict[str, int | float]
+
+
 @dataclass
 class ClusterSpec:
+    """Parameters describing one synthetic moving cluster."""
+
     center_lat: float
     center_lon: float
     start_time_s: float
@@ -22,16 +30,42 @@ class ClusterSpec:
 
 
 def meters_to_lat_deg(meters: float) -> float:
+    """Convert north/south meters to approximate latitude degrees.
+
+    Inputs:
+        meters: Distance in meters along latitude.
+
+    Returns:
+        The approximate latitude delta in degrees.
+    """
     return meters / 111_320.0
 
 
 def meters_to_lon_deg(meters: float, lat_deg: float) -> float:
+    """Convert east/west meters to approximate longitude degrees at a latitude.
+
+    Inputs:
+        meters: Distance in meters along longitude.
+        lat_deg: Reference latitude in degrees.
+
+    Returns:
+        The approximate longitude delta in degrees at the given latitude.
+    """
     denom = 111_320.0 * max(math.cos(math.radians(lat_deg)), 1e-6)
     return meters / denom
 
 
-def sample_cluster_points(spec: ClusterSpec, id_start: int) -> list[dict]:
-    rows: list[dict] = []
+def sample_cluster_points(spec: ClusterSpec, id_start: int) -> list[DetectionRow]:
+    """Sample detections for one synthetic cluster with drift and spatial noise.
+
+    Inputs:
+        spec: Parameters describing the synthetic cluster to generate.
+        id_start: Starting integer id for generated detections.
+
+    Returns:
+        A list of detection dictionaries with ``id``, ``time``, ``lat``, and ``lon``.
+    """
+    rows: list[DetectionRow] = []
     for i in range(spec.n_points):
         dt_s = random.uniform(0.0, spec.duration_s)
         t = spec.start_time_s + dt_s
@@ -48,8 +82,25 @@ def sample_cluster_points(spec: ClusterSpec, id_start: int) -> list[dict]:
     return rows
 
 
-def sample_global_noise(n_points: int, start_time_s: float, end_time_s: float, id_start: int) -> list[dict]:
-    rows: list[dict] = []
+def sample_global_noise(
+    n_points: int,
+    start_time_s: float,
+    end_time_s: float,
+    id_start: int,
+) -> list[DetectionRow]:
+    """Sample uniformly distributed background detections across the globe.
+
+    Inputs:
+        n_points: Number of background detections to generate.
+        start_time_s: Start of the sampling window in unix seconds.
+        end_time_s: End of the sampling window in unix seconds.
+        id_start: Starting integer id for generated detections.
+
+    Returns:
+        A list of background detection dictionaries with ``id``, ``time``, ``lat``,
+        and ``lon``.
+    """
+    rows: list[DetectionRow] = []
     total_s = end_time_s - start_time_s
     for i in range(n_points):
         dt_s = random.uniform(0.0, total_s)
@@ -63,6 +114,14 @@ def sample_global_noise(n_points: int, start_time_s: float, end_time_s: float, i
 
 
 def main() -> None:
+    """Parse CLI arguments and write a synthetic detections parquet file.
+
+    Inputs:
+        None. Arguments are read from the command line.
+
+    Returns:
+        None. The function writes a parquet file and prints a short summary.
+    """
     parser = argparse.ArgumentParser(description="Create a mock detections parquet with unix-second float timestamps.")
     parser.add_argument("--output", default="detections.parquet")
     parser.add_argument("--seed", type=int, default=42)
@@ -81,7 +140,7 @@ def main() -> None:
         ClusterSpec(34.0522, -118.2437, t0 + 45 * 60, 260, 300.0, 300.0, 0.20, 0.10),
     ]
 
-    rows: list[dict] = []
+    rows: list[DetectionRow] = []
     next_id = 0
     for spec in specs:
         pts = sample_cluster_points(spec, next_id)
