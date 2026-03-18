@@ -106,6 +106,26 @@ python3 -m venv .venv
 .venv/bin/pip install -e ".[geo,test]"
 ```
 
+## Continuous Integration
+
+Tests run on GitHub Actions for:
+
+- Python `3.10`
+- Python `3.11`
+- Python `3.12`
+
+The workflow runs on:
+
+- `push`
+- `pull_request`
+
+The GitHub Actions install/test path matches the local developer workflow:
+
+```bash
+python -m pip install -e ".[geo,test]"
+pytest
+```
+
 ## Common Workflows
 
 ### `scripts/make_mock_detections.py`
