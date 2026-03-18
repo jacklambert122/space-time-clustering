@@ -11,6 +11,45 @@ This repo clusters large geospatial detection sets using:
 - connected components for final cluster labels
 - optional GeoPandas classification against city/lake layers
 
+## Quick Start
+
+If you just want to get the repo running, follow this order:
+
+1. Install the package and plotting dependencies:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e ".[geo,test]"
+```
+
+2. Generate a mock dataset:
+
+```bash
+.venv/bin/python scripts/make_mock_detections.py \
+  --output data/detections.parquet \
+  --seed 42 \
+  --noise-points 1000
+```
+
+3. Run the pipeline:
+
+```bash
+.venv/bin/python scripts/run_pipeline.py \
+  --config configs/example_config.json
+```
+
+4. Visualize the results offline:
+
+```bash
+.venv/bin/python scripts/visualize_detections.py \
+  --assignments out/point_assignments.parquet \
+  --summary out/cluster_summary.parquet \
+  --basemap none \
+  --output images/detection_clusters.html
+```
+
+If you want lakes, cities, and land context in the plot, follow the data download steps below first.
+
 ## Repo layout
 
 - `src/space_time_cluster/` - package code
@@ -39,22 +78,24 @@ Base install:
 python -m pip install -e .
 ```
 
-Geo extras:
+Recommended install for most users:
 
 ```bash
-python -m pip install -e ".[geo]"
+python -m pip install -e ".[geo,test]"
 ```
 
-The `geo` extra now also includes the interactive dashboard stack used by the plotting tools:
+What this includes:
 
 - `hvplot`
 - `holoviews`
 - `bokeh`
 - `panel`
+- `pytest`
 
-Test extras:
+Minimal installs:
 
 ```bash
+python -m pip install -e ".[geo]"
 python -m pip install -e ".[test]"
 ```
 
@@ -62,10 +103,10 @@ Local virtual environment example:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -e ".[test]"
+.venv/bin/pip install -e ".[geo,test]"
 ```
 
-## Running each script
+## Common Workflows
 
 ### `scripts/make_mock_detections.py`
 
@@ -107,6 +148,10 @@ Outputs land in `out/` by default:
 - `cluster_city_hits.parquet` when `city_vector_path` is configured
 - `cluster_lake_hits.parquet` when `lake_vector_path` is configured
 
+## Download Reference Data
+
+If you want cities, lakes, or offline land context in the visualization, use these steps.
+
 ### `scripts/prepare_global_cities.py`
 
 This script has two subcommands:
@@ -114,11 +159,11 @@ This script has two subcommands:
 - `geonames` for GeoNames zip inputs
 - `naturalearth` for Natural Earth populated places vector inputs
 
-If you want city data for the pipeline or the visualization script, use one of these two flows.
+Use one of these two city-data flows.
 
 #### City Data: GeoNames
 
-This is the most direct way to generate `data/cities_global.gpkg` and `data/cities_global.parquet`.
+This is the recommended path if you want a simple prepared city layer.
 
 1. Download a GeoNames archive:
 
@@ -129,7 +174,7 @@ wget -O data/raw/cities500.zip \
   http://download.geonames.org/export/dump/cities500.zip
 ```
 
-Larger alternatives if you want more coverage:
+Larger alternatives:
 
 ```bash
 wget -O data/raw/cities1000.zip \
@@ -142,7 +187,7 @@ wget -O data/raw/allCountries.zip \
   http://download.geonames.org/export/dump/allCountries.zip
 ```
 
-2. Build the prepared city outputs:
+2. Build the prepared city files:
 
 ```bash
 python scripts/prepare_global_cities.py geonames \
@@ -160,7 +205,7 @@ This writes:
 
 #### City Data: Natural Earth
 
-Use this if you prefer the Natural Earth populated places dataset.
+Use this if you prefer Natural Earth populated places instead of GeoNames.
 
 1. Download and unzip the source data:
 
@@ -173,7 +218,7 @@ wget -O data/raw/ne_10m_populated_places.zip \
 unzip -o data/raw/ne_10m_populated_places.zip -d data/unpacked/ne_10m_populated_places
 ```
 
-2. Build the prepared city outputs:
+2. Build the prepared city files:
 
 ```bash
 python scripts/prepare_global_cities.py naturalearth \
@@ -203,23 +248,9 @@ This script now exposes a CLI with two subcommands:
 - `lakes`
 - `land`
 
-If you keep your source files in the default repo locations, you can run it without extra arguments:
-
-```bash
-python scripts/prepare_water_land.py lakes
-python scripts/prepare_water_land.py land
-```
-
-Default paths:
-
-- `lakes` input: `data/unpacked/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp`
-- `lakes` output: `data/lakes.parquet`
-- `land` input: `data/unpacked/ne_10m_land/ne_10m_land.shp`
-- `land` output: `data/land_points.parquet`
-
 #### Lake Data: HydroLAKES
 
-If you want lake inputs for visualization or classification, use this flow:
+Use this if you want lake inputs for visualization or classification.
 
 1. Download and unzip HydroLAKES:
 
@@ -232,7 +263,7 @@ wget -O data/raw/HydroLAKES_polys_v10_shp.zip \
 unzip -o data/raw/HydroLAKES_polys_v10_shp.zip -d data/unpacked/HydroLAKES_polys_v10_shp
 ```
 
-2. Either use the raw polygon shapefile directly in visualization:
+2. Then either use the raw polygon shapefile directly in visualization:
 
 ```bash
 --lake-path data/unpacked/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp
@@ -269,7 +300,14 @@ You can then point the visualization script at:
 --land-path data/unpacked/ne_10m_land/ne_10m_land.shp
 ```
 
-You can also override the defaults:
+The helper script also supports these defaults directly:
+
+```bash
+python scripts/prepare_water_land.py lakes
+python scripts/prepare_water_land.py land
+```
+
+Equivalent explicit commands:
 
 ```bash
 python scripts/prepare_water_land.py lakes \
@@ -283,35 +321,25 @@ python scripts/prepare_water_land.py land \
   --output data/land_points.parquet
 ```
 
-#### Convert lakes to centroid parquet records
-
-Use `scripts/prepare_water_land.py` when you want one parquet row per lake with centroid coordinates:
+Python API equivalents:
 
 ```python
 from scripts.prepare_water_land import convert_lakes
+from scripts.prepare_water_land import convert_land
 
 convert_lakes(
     input_path="data/unpacked/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp",
     output_parquet="data/lakes.parquet",
 )
-```
-
-This writes a parquet file with lake name, centroid latitude/longitude, area, and a `type` column.
-
-#### Convert land polygons to sampled point parquet records
-
-Use `scripts/prepare_water_land.py` when you want a coarse grid of points that fall on land:
-
-```python
-from scripts.prepare_water_land import convert_land
-
 convert_land(
     input_path="data/unpacked/ne_10m_land/ne_10m_land.shp",
     output_parquet="data/land_points.parquet",
 )
 ```
 
-This is a simplified approximation intended for quick classification or inspection workflows rather than precise polygon containment analysis.
+`data/lakes.parquet` contains lake centroids. `data/land_points.parquet` contains sampled land points. These are faster and simpler than the raw polygon layers.
+
+## Visualization
 
 ### `scripts/visualize_detections.py`
 
@@ -334,6 +362,19 @@ With the default settings, the script:
 - tries to use `data/lakes.parquet` or `data/unpacked/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp` if present
 - writes `images/detection_clusters.html`
 - uses `--basemap none` by default
+
+Recommended command if you already downloaded the optional reference data:
+
+```bash
+python scripts/visualize_detections.py \
+  --assignments out/point_assignments.parquet \
+  --summary out/cluster_summary.parquet \
+  --land-path data/unpacked/ne_10m_land/ne_10m_land.shp \
+  --city-path data/cities_global.gpkg \
+  --lake-path data/unpacked/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp \
+  --basemap none \
+  --output images/detection_clusters.html
+```
 
 What the plot shows:
 
@@ -411,7 +452,7 @@ Where the visualization inputs come from:
 - `--output`: written by the visualization script itself
   typical file: `images/detection_clusters.html`
 
-Recommended offline-safe example:
+Offline-safe example with nearby-feature search controls:
 
 ```bash
 python scripts/visualize_detections.py \
@@ -419,7 +460,7 @@ python scripts/visualize_detections.py \
   --summary out/cluster_summary.parquet \
   --land-path data/unpacked/ne_10m_land/ne_10m_land.shp \
   --city-path data/cities_global.gpkg \
-  --lake-path data/unpacked/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp \
+  --lake-path data/unpacked/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp \
   --basemap none \
   --output images/detection_clusters.html \
   --nearby-radius-km 50 \
@@ -504,7 +545,7 @@ This is a complete local example that:
   --land-path data/unpacked/ne_10m_land/ne_10m_land.shp \
   --output images/detection_clusters.html \
   --city-path data/cities_global.gpkg \
-  --lake-path data/unpacked/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp \
+  --lake-path data/unpacked/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp \
   --basemap none \
   --nearby-radius-km 100 \
   --max-clusters 10
