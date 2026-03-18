@@ -172,8 +172,8 @@ def create_app() -> pn.Row:
         "wander_sigma_m": pn.widgets.FloatSlider(name="Maneuver Sigma (m)", start=0.0, end=500.0, step=5.0, value=15.0),
         "az_noise_deg": pn.widgets.FloatSlider(name="Az Noise (deg)", start=0.0, end=2.0, step=0.01, value=0.15),
         "el_noise_deg": pn.widgets.FloatSlider(name="El Noise (deg)", start=0.0, end=2.0, step=0.01, value=0.15),
-        "process_noise_var_m2": pn.widgets.FloatLogSlider(name="KF Process Var (m^2)", start=0, end=6, step=0.1, value=25.0),
-        "measurement_noise_var_m2": pn.widgets.FloatLogSlider(name="KF Measurement Var (m^2)", start=1, end=8, step=0.1, value=10000.0),
+        "process_noise_var_m2": pn.widgets.FloatInput(name="KF Process Var (m^2)", value=25.0, step=5.0, start=0.0),
+        "measurement_noise_var_m2": pn.widgets.FloatInput(name="KF Measurement Var (m^2)", value=10000.0, step=1000.0, start=0.0),
         "seed": pn.widgets.IntInput(name="Seed", value=42, step=1),
     }
 
@@ -201,7 +201,7 @@ def main() -> None:
     parser.add_argument("--show", action="store_true", help="Open a browser tab automatically")
     args = parser.parse_args()
 
-    pn.serve({"Kalman Playground": create_app()}, port=args.port, show=args.show)
+    pn.serve(create_app(), port=args.port, show=args.show, title="Kalman Playground")
 
 
 if __name__ == "__main__":
