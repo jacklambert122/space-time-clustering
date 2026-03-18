@@ -6,6 +6,7 @@ from space_time_cluster.kalman import (
     azel_from_satellite,
     constant_position_kalman_feature_dict,
     ground_point_from_azel,
+    is_ground_point_visible_from_satellite,
     run_constant_position_kalman,
     simulate_single_satellite_tracking,
 )
@@ -61,6 +62,31 @@ def test_run_constant_position_kalman_returns_expected_shapes() -> None:
     assert result["sigma_m"][-1] > 0.0
 
 
+def test_visibility_check_distinguishes_visible_and_obstructed_targets() -> None:
+    """Verify line-of-sight visibility distinguishes near-side and far-side targets.
+
+    Inputs:
+        None.
+
+    Returns:
+        None. The test asserts only the near-side target is visible from the satellite.
+    """
+    assert is_ground_point_visible_from_satellite(
+        sat_lat_deg=35.0,
+        sat_lon_deg=-105.0,
+        sat_alt_m=700000.0,
+        target_lat_deg=39.7,
+        target_lon_deg=-105.0,
+    )
+    assert not is_ground_point_visible_from_satellite(
+        sat_lat_deg=0.0,
+        sat_lon_deg=-105.0,
+        sat_alt_m=700000.0,
+        target_lat_deg=39.7,
+        target_lon_deg=-105.0,
+    )
+
+
 def test_constant_position_kalman_features_are_finite() -> None:
     """Verify Kalman feature extraction returns finite summary values.
 
@@ -114,6 +140,7 @@ def test_simulate_single_satellite_tracking_returns_track_columns() -> None:
         "true_lat",
         "measurement_lat",
         "filtered_lat",
+        "true_visible",
         "innovation_m",
         "sigma_m",
         "measurement_error_m",

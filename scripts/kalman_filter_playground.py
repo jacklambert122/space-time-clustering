@@ -120,19 +120,19 @@ def build_dashboard(
                 float(df["innovation_m"].mean()),
                 float(df["sigma_m"].iloc[-1]),
                 float(df["nis"].mean()),
-                float((df["true_el_deg"] >= 0.0).mean()),
+                float(df["true_visible"].mean()),
             ],
         }
     )
-    if (df["true_el_deg"] < 0.0).any():
+    if (~df["true_visible"]).any():
         visibility_note = (
-            "Some target states are below the satellite horizon. In those intervals, "
-            "azimuth/elevation rays intersect the Earth on the near side, so the "
-            "measurement reconstruction is not physically the same ground point."
+            "Some target states are Earth-obstructed from the satellite. In those intervals, "
+            "the target is not the first Earth intersection along the line of sight, so the "
+            "reconstructed ground point is not physically the same target."
         )
     else:
         visibility_note = (
-            "All simulated target states remain above the satellite horizon, so the "
+            "All simulated target states remain Earth-visible from the satellite, so the "
             "azimuth/elevation to ground-point reconstruction is physically consistent."
         )
 
@@ -170,8 +170,8 @@ def create_app() -> pn.Row:
         "east_velocity_mps": pn.widgets.FloatSlider(name="East Velocity (m/s)", start=-100.0, end=100.0, step=1.0, value=0.0),
         "north_velocity_mps": pn.widgets.FloatSlider(name="North Velocity (m/s)", start=-100.0, end=100.0, step=1.0, value=0.0),
         "wander_sigma_m": pn.widgets.FloatSlider(name="Maneuver Sigma (m)", start=0.0, end=500.0, step=5.0, value=15.0),
-        "az_noise_deg": pn.widgets.FloatSlider(name="Az Noise (deg)", start=0.0, end=2.0, step=0.01, value=0.15),
-        "el_noise_deg": pn.widgets.FloatSlider(name="El Noise (deg)", start=0.0, end=2.0, step=0.01, value=0.15),
+        "az_noise_deg": pn.widgets.FloatSlider(name="Az Noise (deg)", start=0.0, end=2.0, step=0.001, value=0.15),
+        "el_noise_deg": pn.widgets.FloatSlider(name="El Noise (deg)", start=0.0, end=2.0, step=0.001, value=0.15),
         "process_noise_var_m2": pn.widgets.FloatInput(name="KF Process Var (m^2)", value=25.0, step=5.0, start=0.0),
         "measurement_noise_var_m2": pn.widgets.FloatInput(name="KF Measurement Var (m^2)", value=10000.0, step=1000.0, start=0.0),
         "seed": pn.widgets.IntInput(name="Seed", value=42, step=1),

@@ -263,6 +263,52 @@ def ground_point_from_azel(
     return lat_deg, lon_deg
 
 
+def is_ground_point_visible_from_satellite(
+    sat_lat_deg: float,
+    sat_lon_deg: float,
+    sat_alt_m: float,
+    target_lat_deg: float,
+    target_lon_deg: float,
+    target_alt_m: float = 0.0,
+    tolerance_m: float = 1.0,
+) -> bool:
+    """Return whether a ground target is on the visible Earth limb from the satellite.
+
+    Inputs:
+        sat_lat_deg: Satellite latitude in degrees.
+        sat_lon_deg: Satellite longitude in degrees.
+        sat_alt_m: Satellite altitude in meters.
+        target_lat_deg: Target latitude in degrees.
+        target_lon_deg: Target longitude in degrees.
+        target_alt_m: Target altitude in meters.
+        tolerance_m: Absolute tolerance for comparing intersection distance to target range.
+
+    Returns:
+        ``True`` when the target is the first Earth-surface intersection along the line of sight.
+    """
+    sat_ecef = geodetic_to_ecef(sat_lat_deg, sat_lon_deg, sat_alt_m)
+    target_ecef = geodetic_to_ecef(target_lat_deg, target_lon_deg, target_alt_m)
+    los = target_ecef - sat_ecef
+    target_range_m = float(np.linalg.norm(los))
+    if target_range_m == 0.0:
+        return False
+    los_unit = los / target_range_m
+    target_radius = EARTH_RADIUS_M + target_alt_m
+
+    a = float(np.dot(los_unit, los_unit))
+    b = float(2.0 * np.dot(sat_ecef, los_unit))
+    c = float(np.dot(sat_ecef, sat_ecef) - target_radius**2)
+    disc = b * b - 4.0 * a * c
+    if disc < 0.0:
+        return False
+
+    sqrt_disc = math.sqrt(disc)
+    roots = sorted(root for root in [(-b - sqrt_disc) / (2.0 * a), (-b + sqrt_disc) / (2.0 * a)] if root > 0.0)
+    if not roots:
+        return False
+    return abs(roots[0] - target_range_m) <= tolerance_m
+
+
 def run_constant_position_kalman(
     x_m: np.ndarray,
     y_m: np.ndarray,
@@ -423,8 +469,16 @@ def simulate_single_satellite_tracking(
     meas_lon: list[float] = []
     meas_az: list[float] = []
     meas_el: list[float] = []
+    visible: list[bool] = []
 
     for lat_deg, lon_deg in zip(true_lat, true_lon):
+        is_visible = is_ground_point_visible_from_satellite(
+            sat_lat_deg=sat_lat_deg,
+            sat_lon_deg=sat_lon_deg,
+            sat_alt_m=sat_alt_m,
+            target_lat_deg=float(lat_deg),
+            target_lon_deg=float(lon_deg),
+        )
         az_deg, el_deg = azel_from_satellite(
             sat_lat_deg=sat_lat_deg,
             sat_lon_deg=sat_lon_deg,
@@ -451,6 +505,7 @@ def simulate_single_satellite_tracking(
         meas_el.append(noisy_el)
         meas_lat.append(measured[0])
         meas_lon.append(measured[1])
+        visible.append(is_visible)
 
     meas_x, meas_y = project_to_local_m(np.asarray(meas_lat), np.asarray(meas_lon), target_lat_deg, target_lon_deg)
     filter_result = run_constant_position_kalman(
@@ -481,6 +536,7 @@ def simulate_single_satellite_tracking(
             "filtered_lon": filt_lon,
             "true_az_deg": np.asarray(true_az, dtype=float),
             "true_el_deg": np.asarray(true_el, dtype=float),
+            "true_visible": np.asarray(visible, dtype=bool),
             "measurement_az_deg": np.asarray(meas_az, dtype=float),
             "measurement_el_deg": np.asarray(meas_el, dtype=float),
             "innovation_m": filter_result["innovation_m"],
